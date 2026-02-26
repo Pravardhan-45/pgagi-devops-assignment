@@ -1,8 +1,8 @@
 # 🚀 PGAGI DevOps Assignment
 
-> FastAPI backend + Next.js frontend deployed on **AWS** (EC2 t2.micro) and **GCP** (Cloud Run) using Terraform IaC and GitHub Actions CI/CD.
+> FastAPI backend + Next.js frontend with production-grade Infrastructure as Code (IaC) for **AWS** and **GCP**.
 
-**Repository:** [pravardhan-45/codetech-task3](https://github.com/pravardhan-45/codetech-task3)
+**Repository:** [pravardhan-45/pgagi-devops-assignment](https://github.com/pravardhan-45/pgagi-devops-assignment)
 
 ---
 
@@ -61,8 +61,8 @@
 
 ### Option 1: Docker Compose (Recommended)
 ```bash
-git clone https://github.com/pravardhan-45/codetech-task3
-cd codetech-task3
+git clone https://github.com/pravardhan-45/pgagi-devops-assignment
+cd pgagi-devops-assignment
 docker-compose up -d
 
 # Verify:
