@@ -1,0 +1,229 @@
+name: Deploy to GCP
+
+on:
+  push:
+    branches:
+      - dev       # → GCP dev Cloud Run
+      - staging   # → GCP staging Cloud Run
+      - main      # → GCP prod Cloud Run
+  workflow_dispatch:
+    inputs:
+      environment:
+        description: 'Target environment'
+        required: true
+        default: 'dev'
+        type: choice
+        options: [dev, staging, prod]
+
+env:
+  GCP_REGION: asia-south1
+
+jobs:
+  setup:
+    runs-on: ubuntu-latest
+    outputs:
+      environment: ${{ steps.env.outputs.environment }}
+      image_tag: ${{ steps.tag.outputs.tag }}
+    steps:
+      - name: Determine environment
+        id: env
+        run: |
+          if [ "${{ github.event_name }}" = "workflow_dispatch" ]; then
+            echo "environment=${{ github.event.inputs.environment }}" >> $GITHUB_OUTPUT
+          elif [ "${{ github.ref }}" = "refs/heads/main" ]; then
+            echo "environment=prod" >> $GITHUB_OUTPUT
+          elif [ "${{ github.ref }}" = "refs/heads/staging" ]; then
+            echo "environment=staging" >> $GITHUB_OUTPUT
+          else
+            echo "environment=dev" >> $GITHUB_OUTPUT
+          fi
+
+      - name: Set image tag
+        id: tag
+        run: echo "tag=${{ github.sha }}" >> $GITHUB_OUTPUT
+
+  # ─────────────────────────────────────────
+  # Build & Push to Artifact Registry
+  # ─────────────────────────────────────────
+  build-and-push:
+    runs-on: ubuntu-latest
+    needs: setup
+    environment: ${{ needs.setup.outputs.environment }}
+
+    steps:
+      - uses: actions/checkout@v4
+
+      - name: Authenticate to GCP
+        uses: google-github-actions/auth@v2
+        with:
+          credentials_json: ${{ secrets.GCP_SA_KEY }}
+
+      - name: Set up Cloud SDK
+        uses: google-github-actions/setup-gcloud@v2
+
+      - name: Configure Docker for Artifact Registry
+        run: gcloud auth configure-docker ${{ env.GCP_REGION }}-docker.pkg.dev --quiet
+
+      - name: Build & Push backend
+        env:
+          ENV: ${{ needs.setup.outputs.environment }}
+          TAG: ${{ needs.setup.outputs.image_tag }}
+          PROJECT_ID: ${{ secrets.GCP_PROJECT_ID }}
+        run: |
+          REPO="${{ env.GCP_REGION }}-docker.pkg.dev/${PROJECT_ID}/devops-${ENV}-backend/backend"
+          docker build -t "${REPO}:${TAG}" -t "${REPO}:latest" ./backend
+          docker push "${REPO}:${TAG}"
+          docker push "${REPO}:latest"
+
+      - name: Build & Push frontend
+        env:
+          ENV: ${{ needs.setup.outputs.environment }}
+          TAG: ${{ needs.setup.outputs.image_tag }}
+          PROJECT_ID: ${{ secrets.GCP_PROJECT_ID }}
+        run: |
+          REPO="${{ env.GCP_REGION }}-docker.pkg.dev/${PROJECT_ID}/devops-${ENV}-frontend/frontend"
+          docker build -t "${REPO}:${TAG}" -t "${REPO}:latest" ./frontend
+          docker push "${REPO}:${TAG}"
+          docker push "${REPO}:latest"
+
+  # ─────────────────────────────────────────
+  # Terraform Plan
+  # ─────────────────────────────────────────
+  terraform-plan:
+    runs-on: ubuntu-latest
+    needs: [setup, build-and-push]
+    environment: ${{ needs.setup.outputs.environment }}
+
+    steps:
+      - uses: actions/checkout@v4
+
+      - name: Authenticate to GCP
+        uses: google-github-actions/auth@v2
+        with:
+          credentials_json: ${{ secrets.GCP_SA_KEY }}
+
+      - name: Setup Terraform
+        uses: hashicorp/setup-terraform@v3
+        with:
+          terraform_version: 1.7.0
+
+      - name: Terraform Init
+        working-directory: infrastructure/gcp/environments/${{ needs.setup.outputs.environment }}
+        run: terraform init
+
+      - name: Terraform Plan
+        working-directory: infrastructure/gcp/environments/${{ needs.setup.outputs.environment }}
+        env:
+          TF_VAR_gcp_project_id: ${{ secrets.GCP_PROJECT_ID }}
+          TF_VAR_image_tag: ${{ needs.setup.outputs.image_tag }}
+        run: terraform plan -out=tfplan
+
+      - name: Upload plan
+        uses: actions/upload-artifact@v4
+        with:
+          name: gcp-terraform-plan-${{ needs.setup.outputs.environment }}
+          path: infrastructure/gcp/environments/${{ needs.setup.outputs.environment }}/tfplan
+          retention-days: 1
+
+  # ─────────────────────────────────────────
+  # Terraform Apply
+  # ─────────────────────────────────────────
+  terraform-apply:
+    runs-on: ubuntu-latest
+    needs: [setup, build-and-push, terraform-plan]
+    environment: ${{ needs.setup.outputs.environment }}
+
+    steps:
+      - uses: actions/checkout@v4
+
+      - name: Authenticate to GCP
+        uses: google-github-actions/auth@v2
+        with:
+          credentials_json: ${{ secrets.GCP_SA_KEY }}
+
+      - name: Setup Terraform
+        uses: hashicorp/setup-terraform@v3
+        with:
+          terraform_version: 1.7.0
+
+      - name: Download plan
+        uses: actions/download-artifact@v4
+        with:
+          name: gcp-terraform-plan-${{ needs.setup.outputs.environment }}
+          path: infrastructure/gcp/environments/${{ needs.setup.outputs.environment }}
+
+      - name: Terraform Init
+        working-directory: infrastructure/gcp/environments/${{ needs.setup.outputs.environment }}
+        run: terraform init
+
+      - name: Terraform Apply
+        working-directory: infrastructure/gcp/environments/${{ needs.setup.outputs.environment }}
+        env:
+          TF_VAR_gcp_project_id: ${{ secrets.GCP_PROJECT_ID }}
+          TF_VAR_image_tag: ${{ needs.setup.outputs.image_tag }}
+        run: terraform apply -auto-approve tfplan
+
+      - name: Get deployed URLs
+        working-directory: infrastructure/gcp/environments/${{ needs.setup.outputs.environment }}
+        env:
+          TF_VAR_gcp_project_id: ${{ secrets.GCP_PROJECT_ID }}
+        run: |
+          echo "🚀 GCP Deployment complete!"
+          echo "Frontend: $(terraform output -raw frontend_url)"
+          echo "Backend:  $(terraform output -raw backend_url)"
+
+  # ─────────────────────────────────────────
+  # Smoke Test (verify health after deploy)
+  # ─────────────────────────────────────────
+  smoke-test:
+    runs-on: ubuntu-latest
+    needs: [setup, terraform-apply]
+    environment: ${{ needs.setup.outputs.environment }}
+
+    steps:
+      - uses: actions/checkout@v4
+
+      - name: Authenticate to GCP
+        uses: google-github-actions/auth@v2
+        with:
+          credentials_json: ${{ secrets.GCP_SA_KEY }}
+
+      - name: Setup Terraform
+        uses: hashicorp/setup-terraform@v3
+        with:
+          terraform_version: 1.7.0
+
+      - name: Get backend URL from Terraform output
+        id: get-url
+        working-directory: infrastructure/gcp/environments/${{ needs.setup.outputs.environment }}
+        env:
+          TF_VAR_gcp_project_id: ${{ secrets.GCP_PROJECT_ID }}
+        run: |
+          terraform init -reconfigure
+          echo "backend_url=$(terraform output -raw backend_url)" >> $GITHUB_OUTPUT
+
+      - name: Health check
+        run: |
+          echo "Waiting for Cloud Run service to be ready..."
+          sleep 15
+          BACKEND_URL="${{ steps.get-url.outputs.backend_url }}"
+          RESPONSE=$(curl -sf "${BACKEND_URL}/api/health" || echo "FAILED")
+          echo "Health check response: $RESPONSE"
+          if echo "$RESPONSE" | grep -q "healthy"; then
+            echo "✅ Health check passed!"
+          else
+            echo "❌ Health check failed"
+            exit 1
+          fi
+
+      - name: Message endpoint check
+        run: |
+          BACKEND_URL="${{ steps.get-url.outputs.backend_url }}"
+          RESPONSE=$(curl -sf "${BACKEND_URL}/api/message" || echo "FAILED")
+          echo "Message response: $RESPONSE"
+          if echo "$RESPONSE" | grep -q "successfully integrated"; then
+            echo "✅ Integration check passed!"
+          else
+            echo "❌ Integration check failed"
+            exit 1
+          fi
