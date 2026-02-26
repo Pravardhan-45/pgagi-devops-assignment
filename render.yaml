@@ -1,0 +1,18 @@
+# Render Blueprint - Backend FastAPI Service
+# https://render.com/docs/blueprint-spec
+services:
+  - type: web
+    name: devops-backend
+    runtime: python
+    region: singapore  # Closest to India
+    plan: free
+    rootDir: backend
+    buildCommand: pip install -r requirements.txt
+    startCommand: uvicorn app.main:app --host 0.0.0.0 --port $PORT
+    envVars:
+      - key: ALLOWED_ORIGINS
+        value: "*"
+      - key: PYTHON_VERSION
+        value: "3.11.0"
+    healthCheckPath: /api/health
+    autoDeploy: true  # Auto deploy on push to main
