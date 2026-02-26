@@ -6,15 +6,15 @@
 
 ---
 
-## 🌐 Live URLs
+## 🌐 Live URLs (Zero-Cost Deployment)
 
-| Cloud | Environment | Frontend | Backend API |
-|-------|-------------|----------|-------------|
-| **AWS** | prod | `http://AWS_IP` *(update after deploy)* | `http://AWS_IP:8000` |
-| **GCP** | prod | `https://devops-prod-frontend-*.run.app` *(update after deploy)* | `https://devops-prod-backend-*.run.app` |
+| Component | Platform | URL |
+|-----------|----------|-----|
+| **Frontend** | Vercel | [https://pgagi-devops-assignment-m1mhw1sbi-aare-pravardhans-projects.vercel.app/](https://pgagi-devops-assignment-m1mhw1sbi-aare-pravardhans-projects.vercel.app/) |
+| **Backend API** | Render | [https://devops-backend-mmmj.onrender.com/api/message](https://devops-backend-mmmj.onrender.com/api/message) |
 
-> 📹 **Demo Video:** *(add Loom/YouTube link after recording)*  
-> 📄 **Full Documentation:** *(add Google Docs link)*
+> [!NOTE]
+> Due to GCP/AWS billing verification requirements (prepayments), a **Zero-Cost Deployment Strategy** was implemented using Render and Vercel. All **Terraform Infrastructure as Code (IaC)** for AWS and GCP remains in the repository as a demonstration of production-grade cloud architecture design.
 
 ---
 
