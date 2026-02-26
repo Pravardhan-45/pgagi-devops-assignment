@@ -1,11 +1,13 @@
 name: Deploy to AWS
 
+# Automatic triggers disabled to prevent errors (requires AWS Secrets to be configured)
 on:
-  push:
-    branches:
-      - dev        # → deploys to dev environment
-      - staging    # → deploys to staging environment
-      - main       # → deploys to prod environment
+  workflow_dispatch:  # Manual triggers only
+#  push:
+#    branches:
+#      - dev        # → deploys to dev environment
+#      - staging    # → deploys to staging environment
+#      - main       # → deploys to prod environment
   workflow_dispatch:
     inputs:
       environment:

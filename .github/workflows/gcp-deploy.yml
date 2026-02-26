@@ -1,12 +1,13 @@
 name: Deploy to GCP
 
+# Automatic triggers disabled to prevent errors (requires GCP Secrets to be configured)
 on:
-  push:
-    branches:
-      - dev       # → GCP dev Cloud Run
-      - staging   # → GCP staging Cloud Run
-      - main      # → GCP prod Cloud Run
-  workflow_dispatch:
+  #push:
+  #  branches:
+  #    - dev       # → GCP dev Cloud Run
+  #    - staging   # → GCP staging Cloud Run
+  #    - main      # → GCP prod Cloud Run
+  workflow_dispatch:  # Manual triggers only
     inputs:
       environment:
         description: 'Target environment'
