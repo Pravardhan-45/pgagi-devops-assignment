@@ -165,7 +165,7 @@ export default function Home() {
 
                     {/* Footer */}
                     <p style={styles.footer}>
-                        Deployed with ❤️ by Pravardhan · Pravardhan-45/codetech-task3
+                        Deployed with ❤️ by Pravardhan Aare · Pravardhan-45/pgagi-devops-assignment
                     </p>
                 </div>
             </main>

@@ -1,5 +1,5 @@
 # Infrastructure Architecture Documentation
-## PGAGI DevOps Assignment — Pravardhan Reddy
+## PGAGI DevOps Assignment — Pravardhan Aare
 
 ---
 
